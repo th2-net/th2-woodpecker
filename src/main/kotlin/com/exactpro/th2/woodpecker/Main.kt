@@ -68,7 +68,7 @@ fun main(args: Array<String>) = try {
         .addModule(SimpleModule().addAbstractTypeMapping(IMessageGeneratorSettings::class.java, generatorFactory.settingsClass))
         .build()
 
-    val onBatch = { batch: MessageGroupBatch -> messageRouter.send(batch, OUTPUT_QUEUE_ATTRIBUTE) }
+    val onBatch = { batch: MessageGroupBatch -> messageRouter.sendAll(batch, OUTPUT_QUEUE_ATTRIBUTE) }
     val onRequest = { message: MessageGroup -> onBatch(MessageGroupBatch.newBuilder().addGroups(message).build()) }
     val settings = commonFactory.getCustomConfiguration(Settings::class.java, mapper)
     val generator = generatorFactory.createGenerator(settings.generatorSettings, onRequest).apply { resources += "generator" to ::close }
