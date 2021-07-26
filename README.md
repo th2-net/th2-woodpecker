@@ -4,7 +4,7 @@ Library that serves as an API for the implementations of th2 load generation too
 
 ## Release Notes
 
-### 0.0.3
+### 0.1.0
 
 + Changed `onBatch` function to make it possible to send in several pins
 + Fixed a bug with message filtering by `message_type`
