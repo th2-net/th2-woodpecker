@@ -1,4 +1,4 @@
-# th2-woodpecker (0.0.3)
+# th2-woodpecker (0.1.0)
 
 Library that serves as an API for the implementations of th2 load generation tool «Woodpecker».
 
