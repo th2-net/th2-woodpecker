@@ -7,3 +7,5 @@ Library that serves as an API for the implementations of th2 load generation too
 ### 0.0.3
 
 + Changed `onBatch` function to make it possible to send in several pins
++ Fixed a bug with message filtering by `message_type`
++ Disable waiting for connection recovery when closing the `SubscribeMonitor`
