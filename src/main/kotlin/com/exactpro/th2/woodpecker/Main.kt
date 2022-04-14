@@ -61,6 +61,7 @@ fun main(args: Array<String>) = try {
     val commonFactory = CommonFactory.createFromArguments(*args).apply { resources += "factory" to ::close }
     val eventRouter = commonFactory.eventBatchRouter
     val messageRouter = commonFactory.messageRouterMessageGroupBatch
+    val grpcRouter = commonFactory.grpcRouter
     val generatorFactory = load<IMessageGeneratorFactory<IMessageGenerator, IMessageGeneratorSettings>>()
 
     val mapper = JsonMapper.builder()
@@ -71,7 +72,7 @@ fun main(args: Array<String>) = try {
     val onBatch = { batch: MessageGroupBatch -> messageRouter.sendAll(batch, OUTPUT_QUEUE_ATTRIBUTE) }
     val onRequest = { message: MessageGroup -> onBatch(MessageGroupBatch.newBuilder().addGroups(message).build()) }
     val settings = commonFactory.getCustomConfiguration(Settings::class.java, mapper)
-    val generator = generatorFactory.createGenerator(settings.generatorSettings, onRequest).apply { resources += "generator" to ::close }
+    val generator = generatorFactory.createGenerator(settings.generatorSettings, grpcRouter, onRequest).apply { resources += "generator" to ::close }
 
     runCatching {
         checkNotNull(messageRouter.subscribe({ _, batch ->
