@@ -16,9 +16,7 @@
 
 package com.exactpro.th2.woodpecker.api
 
-import com.exactpro.th2.common.grpc.MessageGroup
-
-interface IMessageGeneratorFactory<G : IMessageGenerator, S : IMessageGeneratorSettings> {
+interface IMessageGeneratorFactory<S : IMessageGeneratorSettings> {
     val settingsClass: Class<out S>
-    fun createGenerator(settings: S, onRequest: (MessageGroup) -> Unit): G
+    fun createGenerator(context: IMessageGeneratorContext<S>): IMessageGenerator<S>
 }

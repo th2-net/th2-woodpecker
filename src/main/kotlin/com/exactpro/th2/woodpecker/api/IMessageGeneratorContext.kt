@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2022-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,10 @@
 package com.exactpro.th2.woodpecker.api
 
 import com.exactpro.th2.common.grpc.MessageGroup
-import javax.annotation.concurrent.ThreadSafe
+import java.io.InputStream
 
-@ThreadSafe // methods will be called from different threads, but each method will be called from a single thread only
-interface IMessageGenerator<S : IMessageGeneratorSettings> : AutoCloseable {
-    fun onStart(settings: S?) = Unit
-    fun onNext(): MessageGroup
-    fun onResponse(message: MessageGroup) = Unit
-    fun onStop() = Unit
-    override fun close() = Unit
+interface IMessageGeneratorContext<S : IMessageGeneratorSettings> {
+    val settings: S
+    fun send(group: MessageGroup)
+    fun readDictionary(alias: String): InputStream
 }

@@ -25,12 +25,13 @@ import com.exactpro.th2.common.metrics.liveness
 import com.exactpro.th2.common.metrics.readiness
 import com.exactpro.th2.common.schema.factory.CommonFactory
 import com.exactpro.th2.common.schema.message.storeEvent
-import com.exactpro.th2.woodpecker.api.IMessageGenerator
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorFactory
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
+import com.exactpro.th2.woodpecker.api.impl.MessageGeneratorContext
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
 import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.module.kotlin.readValue
 import mu.KotlinLogging
 import java.time.Instant
 import java.util.ServiceLoader
@@ -61,7 +62,7 @@ fun main(args: Array<String>) = try {
     val commonFactory = CommonFactory.createFromArguments(*args).apply { resources += "factory" to ::close }
     val eventRouter = commonFactory.eventBatchRouter
     val messageRouter = commonFactory.messageRouterMessageGroupBatch
-    val generatorFactory = load<IMessageGeneratorFactory<IMessageGenerator, IMessageGeneratorSettings>>()
+    val generatorFactory = load<IMessageGeneratorFactory<IMessageGeneratorSettings>>()
 
     val mapper = JsonMapper.builder()
         .addModule(KotlinModule(nullIsSameAsDefault = true))
@@ -71,7 +72,8 @@ fun main(args: Array<String>) = try {
     val onBatch = { batch: MessageGroupBatch -> messageRouter.sendAll(batch, OUTPUT_QUEUE_ATTRIBUTE) }
     val onRequest = { message: MessageGroup -> onBatch(MessageGroupBatch.newBuilder().addGroups(message).build()) }
     val settings = commonFactory.getCustomConfiguration(Settings::class.java, mapper)
-    val generator = generatorFactory.createGenerator(settings.generatorSettings, onRequest).apply { resources += "generator" to ::close }
+    val context = MessageGeneratorContext(settings.generatorSettings, onRequest, commonFactory::loadDictionary)
+    val generator = generatorFactory.createGenerator(context).apply { resources += "generator" to ::close }
 
     runCatching {
         checkNotNull(messageRouter.subscribe({ _, batch ->
@@ -106,7 +108,16 @@ fun main(args: Array<String>) = try {
         }::put
     }
 
-    val service = Service(settings.maxBatchSize, generator::onStart, generator::onNext, onBatchProxy, onEvent).apply { resources += "service" to ::close }
+    val service = Service(
+        settings.maxBatchSize,
+        settings.generatorSettings,
+        mapper::readValue,
+        generator::onStart,
+        generator::onNext,
+        generator::onStop,
+        onBatchProxy,
+        onEvent
+    ).apply { resources += "service" to ::close }
 
     commonFactory.grpcRouter.startServer(service).run {
         start()
