@@ -109,6 +109,7 @@ fun main(args: Array<String>) = try {
     }
 
     val service = Service(
+        settings.minBatchesPerSecond,
         settings.maxBatchSize,
         settings.generatorSettings,
         mapper::readValue,
@@ -133,11 +134,13 @@ fun main(args: Array<String>) = try {
 }
 
 data class Settings(
+    val minBatchesPerSecond: Int = 1,
     val maxBatchSize: Int = 100,
     val maxOutputQueueSize: Int = 0,
-    val generatorSettings: IMessageGeneratorSettings
+    val generatorSettings: IMessageGeneratorSettings,
 ) {
     init {
+        require(minBatchesPerSecond > 0) { "${::minBatchesPerSecond.name} is less or equal to zero: $maxBatchSize" }
         require(maxBatchSize > 0) { "${::maxBatchSize.name} is less or equal to zero: $maxBatchSize" }
         require(maxOutputQueueSize >= 0) { "${::maxOutputQueueSize.name} is less than zero: $maxOutputQueueSize" }
     }

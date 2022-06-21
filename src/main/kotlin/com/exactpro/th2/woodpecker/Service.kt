@@ -35,9 +35,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.Future
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit.MILLISECONDS
-import java.util.concurrent.TimeUnit.SECONDS
 
 class Service(
+    private val minBatchesPerSecond: Int,
     private val maxBatchSize: Int,
     private val settings: IMessageGeneratorSettings,
     private val readSettings: (String) -> IMessageGeneratorSettings,
@@ -52,6 +52,7 @@ class Service(
     private var future: Future<*> = CompletableFuture.completedFuture(null)
 
     init {
+        check(minBatchesPerSecond > 0) { "Invalid ${::minBatchesPerSecond.name} (<= 0): $minBatchesPerSecond" }
         check(maxBatchSize > 0) { "Invalid ${::maxBatchSize.name} (<= 0): $maxBatchSize" }
     }
 
@@ -64,7 +65,7 @@ class Service(
             !future.isDone -> failure("Load is already running")
             else -> {
                 onStart(request.settings.readSettings())
-                future = executor.startLoad { rate }
+                future = executor.startLoad { rate / minBatchesPerSecond }
                 success("Started load at constant rate: $rate mps")
             }
         }
@@ -119,7 +120,7 @@ class Service(
             forEach { step ->
                 onStart(step.settings.readSettings())
                 onInfo { "Started load step: ${step.toHuman()}" }
-                repeat(step.duration) { yield(step.rate) }
+                repeat(step.duration * minBatchesPerSecond) { yield(step.rate / minBatchesPerSecond) }
                 onInfo { "Finished load step: ${step.toHuman()}" }
                 onStop()
             }
@@ -147,9 +148,12 @@ class Service(
         }
     }
 
-    private fun ScheduledExecutorService.startLoad(rate: () -> Int): Future<*> {
-        return scheduleAtFixedRate(generateLoad(rate), 1, 1, SECONDS)
-    }
+    private fun ScheduledExecutorService.startLoad(rate: () -> Int) = scheduleAtFixedRate(
+        generateLoad(rate),
+        1000L / minBatchesPerSecond,
+        1000L / minBatchesPerSecond,
+        MILLISECONDS
+    )
 
     private fun onInfo(message: () -> String) {
         logger.info(message)
