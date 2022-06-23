@@ -39,7 +39,6 @@ import java.util.concurrent.TimeUnit.MILLISECONDS
 class Service(
     private val minBatchesPerSecond: Int,
     private val maxBatchSize: Int,
-    private val settings: IMessageGeneratorSettings,
     private val readSettings: (String) -> IMessageGeneratorSettings,
     private val onStart: (IMessageGeneratorSettings?) -> Unit,
     private val onNext: () -> MessageGroup,

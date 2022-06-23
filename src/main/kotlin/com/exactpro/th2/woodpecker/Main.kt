@@ -111,7 +111,6 @@ fun main(args: Array<String>) = try {
     val service = Service(
         settings.minBatchesPerSecond,
         settings.maxBatchSize,
-        settings.generatorSettings,
         mapper::readValue,
         generator::onStart,
         generator::onNext,
@@ -134,8 +133,8 @@ fun main(args: Array<String>) = try {
 }
 
 data class Settings(
-    val minBatchesPerSecond: Int = 1,
     val maxBatchSize: Int = 100,
+    val minBatchesPerSecond: Int = 1,
     val maxOutputQueueSize: Int = 0,
     val generatorSettings: IMessageGeneratorSettings,
 ) {
