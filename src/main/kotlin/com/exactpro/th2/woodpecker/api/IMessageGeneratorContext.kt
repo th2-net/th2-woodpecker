@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2022 Exactpro (Exactpro Systems Limited)
+ * Copyright 2022-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,11 @@
 
 package com.exactpro.th2.woodpecker.api
 
-interface IMessageGeneratorFactory<S : IMessageGeneratorSettings> {
-    val settingsClass: Class<out S>
-    fun createGenerator(context: IMessageGeneratorContext<S>): IMessageGenerator<S>
+import com.exactpro.th2.common.grpc.MessageGroup
+import java.io.InputStream
+
+interface IMessageGeneratorContext<S : IMessageGeneratorSettings> {
+    val settings: S
+    fun send(group: MessageGroup)
+    fun readDictionary(alias: String): InputStream
 }

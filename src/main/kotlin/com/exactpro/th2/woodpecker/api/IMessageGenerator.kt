@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2021-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,10 @@ import com.exactpro.th2.common.grpc.MessageGroup
 import javax.annotation.concurrent.ThreadSafe
 
 @ThreadSafe // methods will be called from different threads, but each method will be called from a single thread only
-interface IMessageGenerator : AutoCloseable {
-    fun onStart() = Unit
+interface IMessageGenerator<S : IMessageGeneratorSettings> : AutoCloseable {
+    fun onStart(settings: S?) = Unit
     fun onNext(): MessageGroup
     fun onResponse(message: MessageGroup) = Unit
+    fun onStop() = Unit
     override fun close() = Unit
 }
