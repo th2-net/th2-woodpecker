@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2021-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit.MILLISECONDS
 
 class Service(
-    private val minBatchesPerSecond: Int,
+    private val tickRate: Int,
     private val maxBatchSize: Int,
     private val readSettings: (String) -> IMessageGeneratorSettings,
     private val onStart: (IMessageGeneratorSettings?) -> Unit,
@@ -51,7 +51,7 @@ class Service(
     private var future: Future<*> = CompletableFuture.completedFuture(null)
 
     init {
-        check(minBatchesPerSecond > 0) { "Invalid ${::minBatchesPerSecond.name} (<= 0): $minBatchesPerSecond" }
+        check(tickRate > 0) { "Invalid ${::tickRate.name} (<= 0): $tickRate" }
         check(maxBatchSize > 0) { "Invalid ${::maxBatchSize.name} (<= 0): $maxBatchSize" }
     }
 
@@ -64,7 +64,7 @@ class Service(
             !future.isDone -> failure("Load is already running")
             else -> {
                 onStart(request.settings.readSettings())
-                future = executor.startLoad { rate / minBatchesPerSecond }
+                future = executor.startLoad { rate / tickRate }
                 success("Started load at constant rate: $rate mps")
             }
         }
@@ -119,7 +119,7 @@ class Service(
             forEach { step ->
                 onStart(step.settings.readSettings())
                 onInfo { "Started load step: ${step.toHuman()}" }
-                repeat(step.duration * minBatchesPerSecond) { yield(step.rate / minBatchesPerSecond) }
+                repeat(step.duration * tickRate) { yield(step.rate / tickRate) }
                 onInfo { "Finished load step: ${step.toHuman()}" }
                 onStop()
             }
@@ -149,8 +149,8 @@ class Service(
 
     private fun ScheduledExecutorService.startLoad(rate: () -> Int) = scheduleAtFixedRate(
         generateLoad(rate),
-        1000L / minBatchesPerSecond,
-        1000L / minBatchesPerSecond,
+        1000L / tickRate,
+        1000L / tickRate,
         MILLISECONDS
     )
 

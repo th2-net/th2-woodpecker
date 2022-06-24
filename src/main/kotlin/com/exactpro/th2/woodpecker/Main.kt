@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2021 Exactpro (Exactpro Systems Limited)
+ * Copyright 2021-2022 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,7 +109,7 @@ fun main(args: Array<String>) = try {
     }
 
     val service = Service(
-        settings.minBatchesPerSecond,
+        settings.tickRate,
         settings.maxBatchSize,
         mapper::readValue,
         generator::onStart,
@@ -133,13 +133,13 @@ fun main(args: Array<String>) = try {
 }
 
 data class Settings(
-    val maxBatchSize: Int = 100,
-    val minBatchesPerSecond: Int = 1,
+    val tickRate: Int = 10,
+    val maxBatchSize: Int = 1000,
     val maxOutputQueueSize: Int = 0,
     val generatorSettings: IMessageGeneratorSettings,
 ) {
     init {
-        require(minBatchesPerSecond > 0) { "${::minBatchesPerSecond.name} is less or equal to zero: $maxBatchSize" }
+        require(tickRate > 0) { "${::tickRate.name} is less or equal to zero: $maxBatchSize" }
         require(maxBatchSize > 0) { "${::maxBatchSize.name} is less or equal to zero: $maxBatchSize" }
         require(maxOutputQueueSize >= 0) { "${::maxOutputQueueSize.name} is less than zero: $maxOutputQueueSize" }
     }
