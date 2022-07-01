@@ -17,6 +17,10 @@ Following graph illustrates how load is distributed in time depending on its rat
 
 ## Release Notes
 
+### 1.0.1
+
++ ensure that ticks aren't executed at a higher rate, if a slow-generator suddenly speeds up, to avoid overshooting target rate
+
 ### 1.0.0
 
 + pass load settings to `onStart` method (if any were specified)
