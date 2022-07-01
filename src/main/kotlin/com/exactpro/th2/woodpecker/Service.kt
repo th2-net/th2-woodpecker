@@ -33,8 +33,11 @@ import mu.KotlinLogging
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
+import java.util.concurrent.FutureTask
 import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.MILLISECONDS
+import java.util.concurrent.TimeUnit.NANOSECONDS
 
 class Service(
     private val tickRate: Int,
@@ -147,11 +150,10 @@ class Service(
         }
     }
 
-    private fun ScheduledExecutorService.startLoad(rate: () -> Int) = scheduleAtFixedRate(
-        generateLoad(rate),
+    private fun ScheduledExecutorService.startLoad(rate: () -> Int) = scheduleWithMinDelay(
         1000L / tickRate,
-        1000L / tickRate,
-        MILLISECONDS
+        MILLISECONDS,
+        generateLoad(rate)
     )
 
     private fun onInfo(message: () -> String) {
@@ -195,5 +197,17 @@ class Service(
             val rest = this@toSizes % maxSize
             if (rest > 0) yield(rest)
         }
+
+        private fun ScheduledExecutorService.scheduleWithMinDelay(
+            delay: Long,
+            unit: TimeUnit,
+            task: Runnable,
+        ): Future<*> = object : FutureTask<Any?>(task, null) {
+            override fun run() {
+                if (isCancelled) return
+                val nextTriggerTime = System.nanoTime() + unit.toNanos(delay)
+                if (runAndReset()) schedule(this, nextTriggerTime - System.nanoTime(), NANOSECONDS)
+            }
+        }.apply(::execute)
     }
 }
