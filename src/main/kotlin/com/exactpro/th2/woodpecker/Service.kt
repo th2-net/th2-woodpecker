@@ -61,12 +61,14 @@ class Service(
     @Synchronized
     override fun start(request: StartRequest, observer: StreamObserver<Response>) = observer {
         val rate = request.rate
+        val settings = runCatching { request.settings.readSettings() }
 
         when {
             rate < 1 -> failure("Rate is less than 1: $rate mps")
             !future.isDone -> failure("Load is already running")
+            settings.isFailure -> failure("Cannot load settings: ${settings.exceptionOrNull()?.message}")
             else -> {
-                onStart(request.settings.readSettings())
+                onStart(settings.getOrNull())
                 future = executor.startLoad { rate / tickRate }
                 success("Started load at constant rate: $rate mps")
             }
@@ -77,12 +79,14 @@ class Service(
     override fun schedule(request: ScheduleRequest, observer: StreamObserver<Response>) = observer {
         val cycles = request.cycles
         val steps = request.stepsList
-        val invalidSteps = steps.filter { it.duration < 1 || it.rate < 1 || it.settings.runCatching(readSettings).isFailure }
+        val invalidStep = steps.firstOrNull { it.duration < 1 || it.rate < 1 }
+        val invalidSettings = steps.map { it to it.settings.runCatching(readSettings).exceptionOrNull() }.firstOrNull { it.second != null }
 
         when {
             cycles < 1 -> failure("Amount of cycles is less than 1: $cycles")
             steps.isEmpty() -> failure("There are no steps")
-            invalidSteps.isNotEmpty() -> failure("Invalid steps (duration < 1s or rate < 1 mps or invalid settings): ${invalidSteps.toHuman()}")
+            invalidStep != null -> failure("Invalid step (duration < 1s or rate < 1 mps): ${invalidStep.toHuman()}")
+            invalidSettings != null -> failure("Cannot load step (${invalidSettings.first.toHuman()}) settings: ${invalidSettings.second?.message}")
             !future.isDone -> failure("Load is already running")
             else -> {
                 future = executor.startLoad(steps.toRates(cycles)::next)
