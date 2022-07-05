@@ -124,11 +124,21 @@ class Service(
             onInfo { "Started load cycle ${cycle + 1}" }
 
             forEach { step ->
-                onStart(step.settings.readSettings())
+                val settings = step.settings.readSettings()
+
+                settings.runCatching(onStart).getOrElse {
+                    onError(it) { "Failed to execute onStart handler" }
+                    throw it
+                }
+
                 onInfo { "Started load step: ${step.toHuman()}" }
                 repeat(step.duration * tickRate) { yield(step.rate / tickRate) }
                 onInfo { "Finished load step: ${step.toHuman()}" }
-                onStop()
+
+                runCatching(onStop).getOrElse {
+                    onError(it) { "Failed to execute onStop handler" }
+                    throw it
+                }
             }
 
             onInfo { "Finished load cycle ${cycle + 1}" }
@@ -137,7 +147,7 @@ class Service(
         onInfo { "Load sequence has been completed" }
     }
 
-    private fun sendBatch(size: Int) = MessageGroupBatch.newBuilder().runCatching {
+    private fun generateBatch(size: Int) = MessageGroupBatch.newBuilder().runCatching {
         repeat(size) { addGroups(onNext()) }
         onBatch(build())
     }.getOrElse {
@@ -146,12 +156,7 @@ class Service(
     }
 
     private fun generateLoad(rate: () -> Int) = Runnable {
-        try {
-            rate().toSizes(maxBatchSize).forEach(::sendBatch)
-        } catch (e: Exception) {
-            onError(e) { "Failed to generate load" }
-            throw e
-        }
+        rate().toSizes(maxBatchSize).forEach(::generateBatch)
     }
 
     private fun ScheduledExecutorService.startLoad(rate: () -> Int) = scheduleWithMinDelay(
