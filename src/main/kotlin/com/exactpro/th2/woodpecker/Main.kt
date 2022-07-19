@@ -116,7 +116,8 @@ fun main(args: Array<String>) = try {
         generator::onNext,
         generator::onStop,
         onBatchProxy,
-        onEvent
+        onEvent,
+        rootEventId
     ).apply { resources += "service" to ::close }
 
     commonFactory.grpcRouter.startServer(service).run {
