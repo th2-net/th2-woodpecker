@@ -18,8 +18,8 @@ package com.exactpro.th2.woodpecker
 
 import com.exactpro.th2.common.grpc.MessageGroup
 import com.exactpro.th2.common.grpc.MessageGroupBatch
+import com.exactpro.th2.woodpecker.api.IMessageGenerator
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
-import com.exactpro.th2.woodpecker.api.OnStartParameters
 import com.exactpro.th2.woodpecker.grpc.Response
 import com.exactpro.th2.woodpecker.grpc.Response.Status.FAILURE
 import com.exactpro.th2.woodpecker.grpc.Response.Status.SUCCESS
@@ -44,7 +44,7 @@ class Service(
     private val tickRate: Int,
     private val maxBatchSize: Int,
     private val readSettings: (String) -> IMessageGeneratorSettings,
-    private val onStart: (OnStartParameters?) -> Unit,
+    private val onStart: (IMessageGenerator.OnStartParameters?) -> Unit,
     private val onNext: () -> MessageGroup,
     private val onStop: () -> Unit,
     private val onBatch: (MessageGroupBatch) -> Unit,
@@ -64,7 +64,7 @@ class Service(
     override fun start(request: StartRequest, observer: StreamObserver<Response>) = observer {
         val rate = request.rate
         val settings = runCatching { request.settings.readSettings() }
-        val parameters = OnStartParameters(settings.getOrNull(), rootEventId)
+        val parameters = IMessageGenerator.OnStartParameters(settings.getOrNull(), rootEventId)
 
         when {
             rate < 1 -> failure("Rate is less than 1: $rate mps")
@@ -128,7 +128,7 @@ class Service(
 
             forEach { step ->
                 val settings = step.settings.readSettings()
-                val parameters = OnStartParameters(settings, rootEventId)
+                val parameters = IMessageGenerator.OnStartParameters(settings, rootEventId)
 
                 parameters.runCatching(onStart).getOrElse {
                     onError(it) { "Failed to execute onStart handler" }

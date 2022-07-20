@@ -19,10 +19,10 @@ package com.exactpro.th2.woodpecker.api
 import com.exactpro.th2.common.grpc.MessageGroup
 import javax.annotation.concurrent.ThreadSafe
 
-data class OnStartParameters(val settings: IMessageGeneratorSettings?, val rootEventId: String)
 
 @ThreadSafe // methods will be called from different threads, but each method will be called from a single thread only
 interface IMessageGenerator<S : IMessageGeneratorSettings> : AutoCloseable {
+    data class OnStartParameters(val settings: IMessageGeneratorSettings?, val rootEventId: String)
     fun onStart(parameters: OnStartParameters?) = Unit
     fun onNext(): MessageGroup
     fun onResponse(message: MessageGroup) = Unit
