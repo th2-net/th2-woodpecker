@@ -80,7 +80,7 @@ class Service(
         val cycles = request.cycles
         val steps = request.stepsList
         val invalidStep = steps.firstOrNull { it.duration < 1 || it.rate < 1 }
-        val invalidSettings = steps.map { it to it.settings.runCatching(readSettings).exceptionOrNull() }.firstOrNull { it.second != null }
+        val invalidSettings = steps.map { it to it.settings.runCatching { readSettings() }.exceptionOrNull() }.firstOrNull { it.second != null }
 
         when {
             cycles < 1 -> failure("Amount of cycles is less than 1: $cycles")
