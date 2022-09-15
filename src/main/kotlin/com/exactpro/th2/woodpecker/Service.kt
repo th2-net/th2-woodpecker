@@ -16,6 +16,8 @@
 
 package com.exactpro.th2.woodpecker
 
+import com.exactpro.th2.common.event.Event
+import com.exactpro.th2.common.event.IBodyData
 import com.exactpro.th2.common.grpc.MessageGroup
 import com.exactpro.th2.common.grpc.MessageGroupBatch
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
@@ -47,7 +49,7 @@ class Service(
     private val onNext: () -> MessageGroup,
     private val onStop: () -> Unit,
     private val onBatch: (MessageGroupBatch) -> Unit,
-    private val onEvent: (cause: Throwable?, type: String, message: () -> String) -> Unit,
+    private val onEvent: (Event) -> Unit,
 ) : WoodpeckerImplBase(), AutoCloseable {
     private val logger = KotlinLogging.logger {}
     private val executor = Executors.newSingleThreadScheduledExecutor()
@@ -67,10 +69,10 @@ class Service(
             rate < 1 -> failure("Rate is less than 1: $rate mps")
             !future.isDone -> failure("Load is already running")
             settings.isFailure -> failure("Cannot load settings: ${settings.exceptionOrNull()?.message}")
-            else -> {
-                onStart(settings.getOrNull())
+            else -> with(settings.getOrNull()) {
+                onStart(this)
                 future = executor.startLoad { rate / tickRate }
-                success("Started load at constant rate: $rate mps")
+                success("Started load at constant rate: $rate mps", SettingsBody(this))
             }
         }
     }
@@ -121,37 +123,37 @@ class Service(
 
     private fun List<Step>.toRates(cycles: Int) = iterator {
         repeat(cycles) { cycle ->
-            onInfo { "Started load cycle ${cycle + 1}" }
+            onInfo("Started load cycle ${cycle + 1}")
 
             forEach { step ->
                 val settings = step.settings.readSettings()
 
                 settings.runCatching(onStart).getOrElse {
-                    onError(it) { "Failed to execute onStart handler" }
+                    onError("Failed to execute onStart handler", it)
                     throw it
                 }
 
-                onInfo { "Started load step: ${step.toHuman()}" }
+                onInfo("Started load step: ${step.toHuman()}", SettingsBody(settings))
                 repeat(step.duration * tickRate) { yield(step.rate / tickRate) }
-                onInfo { "Finished load step: ${step.toHuman()}" }
+                onInfo("Finished load step: ${step.toHuman()}")
 
                 runCatching(onStop).getOrElse {
-                    onError(it) { "Failed to execute onStop handler" }
+                    onError("Failed to execute onStop handler", it)
                     throw it
                 }
             }
 
-            onInfo { "Finished load cycle ${cycle + 1}" }
+            onInfo("Finished load cycle ${cycle + 1}")
         }
 
-        onInfo { "Load sequence has been completed" }
+        onInfo("Load sequence has been completed")
     }
 
     private fun generateBatch(size: Int) = MessageGroupBatch.newBuilder().runCatching {
         repeat(size) { addGroups(onNext()) }
         onBatch(build())
     }.getOrElse {
-        onError(it) { "Failed to send $size messages" }
+        onError("Failed to send $size messages", it)
         throw it
     }
 
@@ -165,35 +167,37 @@ class Service(
         generateLoad(rate)
     )
 
-    private fun onInfo(message: () -> String) {
-        logger.info(message)
-        onEvent(null, "Info", message)
+    private fun onInfo(event: String, description: IBodyData? = null) {
+        logger.info(event)
+        onEvent(infoEvent(event, description))
     }
 
-    private fun onError(cause: Throwable? = null, message: () -> String) {
-        logger.error(cause, message)
-        onEvent(cause, "Error", message)
+    private fun onError(event: String, cause: Throwable? = null) {
+        logger.error(event, cause)
+        onEvent(errorEvent(event, cause))
     }
 
-    private fun success(message: String): Response {
-        onInfo { message }
-        return Response.newBuilder().setStatus(SUCCESS).setMessage(message).build()
+    private fun success(event: String, description: IBodyData? = null): Response {
+        onInfo(event, description)
+        return Response.newBuilder().setStatus(SUCCESS).setMessage(event).build()
     }
 
-    private fun failure(message: String): Response {
-        onError { message }
-        return Response.newBuilder().setStatus(FAILURE).setMessage(message).build()
+    private fun failure(event: String): Response {
+        onError(event)
+        return Response.newBuilder().setStatus(FAILURE).setMessage(event).build()
     }
 
     private operator fun StreamObserver<Response>.invoke(block: () -> Response) = try {
         onNext(block())
         onCompleted()
     } catch (e: Exception) {
-        onError(e) { "Failed to serve request" }
+        onError("Failed to serve request", e)
         onError(Status.INTERNAL.withDescription(e.message).withCause(e).asException())
     }
 
     private fun String?.readSettings() = if (isNullOrBlank()) null else readSettings(this)
+
+    private data class SettingsBody(val settings: IMessageGeneratorSettings?) : IBodyData
 
     companion object {
         private const val CLOSE_TIMEOUT_MS = 5000L

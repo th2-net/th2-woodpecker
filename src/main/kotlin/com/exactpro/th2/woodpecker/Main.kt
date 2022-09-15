@@ -90,8 +90,8 @@ fun main(args: Array<String>) = try {
         type("Microservice")
     }).id
 
-    val onEvent = { cause: Throwable?, type: String, message: () -> String ->
-        eventRouter.storeEvent(rootEventId, message(), type, cause)
+    val onEvent = { event: Event ->
+        eventRouter.storeEvent(event, rootEventId)
     }
 
     val onBatchProxy = when (val size = settings.maxOutputQueueSize) {
@@ -100,7 +100,7 @@ fun main(args: Array<String>) = try {
             resources += "sender" to thread(name = "sender") {
                 while (!Thread.interrupted()) {
                     take().runCatching(onBatch).getOrElse {
-                        onEvent(it, "Error") { "Failed to send message batch" }
+                        onEvent(errorEvent("Failed to send message batch", it))
                         LOGGER.error(it) { "Failed to send message batch" }
                     }
                 }
