@@ -66,7 +66,7 @@ class Service(
         val settings = runCatching { request.settings.readSettings() }
 
         when {
-            rate < 1 -> failure("Rate is less than 1: $rate mps")
+            rate < tickRate -> failure("Rate is less than tick-rate ($tickRate): $rate mps")
             !future.isDone -> failure("Load is already running")
             settings.isFailure -> failure("Cannot load settings: ${settings.exceptionOrNull()?.message}")
             else -> with(settings.getOrNull()) {
@@ -81,13 +81,13 @@ class Service(
     override fun schedule(request: ScheduleRequest, observer: StreamObserver<Response>) = observer {
         val cycles = request.cycles
         val steps = request.stepsList
-        val invalidStep = steps.firstOrNull { it.duration < 1 || it.rate < 1 }
+        val invalidStep = steps.firstOrNull { it.duration < 1 || it.rate < tickRate }
         val invalidSettings = steps.map { it to it.settings.runCatching { readSettings() }.exceptionOrNull() }.firstOrNull { it.second != null }
 
         when {
             cycles < 1 -> failure("Amount of cycles is less than 1: $cycles")
             steps.isEmpty() -> failure("There are no steps")
-            invalidStep != null -> failure("Invalid step (duration < 1s or rate < 1 mps): ${invalidStep.toHuman()}")
+            invalidStep != null -> failure("Invalid step (duration < 1s or rate < tick-rate ($tickRate): ${invalidStep.toHuman()}")
             invalidSettings != null -> failure("Cannot load step (${invalidSettings.first.toHuman()}) settings: ${invalidSettings.second?.message}")
             !future.isDone -> failure("Load is already running")
             else -> {

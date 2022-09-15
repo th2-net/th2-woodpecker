@@ -17,6 +17,10 @@ Following graph illustrates how load is distributed in time depending on its rat
 
 ## Release Notes
 
+### 1.0.6
+
++ check that rate is higher or equal to `tickRate`
+
 ### 1.0.5
 
 + attach load settings to corresponding events
