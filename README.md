@@ -17,6 +17,10 @@ Following graph illustrates how load is distributed in time depending on its rat
 
 ## Release Notes
 
+### 1.0.7
+
++ Attach events to the specified parent event ID during generation (if any was provided in the initial request)
+
 ### 1.0.6
 
 + check that rate is higher or equal to `tickRate`

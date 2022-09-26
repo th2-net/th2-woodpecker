@@ -40,6 +40,7 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.TimeUnit.NANOSECONDS
+import com.exactpro.th2.common.grpc.EventID
 
 class Service(
     private val tickRate: Int,
@@ -49,11 +50,12 @@ class Service(
     private val onNext: () -> MessageGroup,
     private val onStop: () -> Unit,
     private val onBatch: (MessageGroupBatch) -> Unit,
-    private val onEvent: (Event) -> Unit,
+    private val onEvent: (Event, EventID?) -> Unit,
 ) : WoodpeckerImplBase(), AutoCloseable {
     private val logger = KotlinLogging.logger {}
     private val executor = Executors.newSingleThreadScheduledExecutor()
     private var future: Future<*> = CompletableFuture.completedFuture(null)
+    private var parentEventID: EventID? = null
 
     init {
         check(tickRate > 0) { "Invalid ${::tickRate.name} (<= 0): $tickRate" }
@@ -71,6 +73,7 @@ class Service(
             settings.isFailure -> failure("Cannot load settings: ${settings.exceptionOrNull()?.message}")
             else -> with(settings.getOrNull()) {
                 onStart(this)
+                parentEventID = request.parentIdOrNull
                 future = executor.startLoad { rate / tickRate }
                 success("Started load at constant rate: $rate mps", SettingsBody(this))
             }
@@ -91,6 +94,7 @@ class Service(
             invalidSettings != null -> failure("Cannot load step (${invalidSettings.first.toHuman()}) settings: ${invalidSettings.second?.message}")
             !future.isDone -> failure("Load is already running")
             else -> {
+                parentEventID = request.parentIdOrNull
                 future = executor.startLoad(steps.toRates(cycles)::next)
                 success("Started $cycles cycles of load steps: ${steps.toHuman()}")
             }
@@ -102,7 +106,10 @@ class Service(
         when {
             future.isDone -> failure("Load is already stopped")
             !future.cancel(true) -> failure("Failed to stop load")
-            else -> success("Successfully stopped load").also { onStop() }
+            else -> success("Successfully stopped load").also {
+                onStop()
+                parentEventID = null
+            }
         }
     }
 
@@ -169,12 +176,12 @@ class Service(
 
     private fun onInfo(event: String, description: IBodyData? = null) {
         logger.info(event)
-        onEvent(infoEvent(event, description))
+        onEvent(infoEvent(event, description), parentEventID)
     }
 
     private fun onError(event: String, cause: Throwable? = null) {
         logger.error(event, cause)
-        onEvent(errorEvent(event, cause))
+        onEvent(errorEvent(event, cause), parentEventID)
     }
 
     private fun success(event: String, description: IBodyData? = null): Response {
@@ -222,5 +229,11 @@ class Service(
                 if (runAndReset()) schedule(this, nextTriggerTime - System.nanoTime(), NANOSECONDS)
             }
         }.apply(::execute)
+
+        private val StartRequest.parentIdOrNull: EventID?
+            get() = if (hasParentEventId()) parentEventId else null
+
+        private val ScheduleRequest.parentIdOrNull: EventID?
+            get() = if (hasParentEventId()) parentEventId else null
     }
 }

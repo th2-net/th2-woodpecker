@@ -39,6 +39,9 @@ import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.LinkedBlockingQueue
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
+import com.exactpro.th2.common.grpc.EventID
+import com.exactpro.th2.common.metrics.LIVENESS_MONITOR
+import com.exactpro.th2.common.metrics.READINESS_MONITOR
 
 private val LOGGER = KotlinLogging.logger {}
 
@@ -46,7 +49,7 @@ private const val INPUT_QUEUE_ATTRIBUTE = "in"
 private const val OUTPUT_QUEUE_ATTRIBUTE = "out"
 
 fun main(args: Array<String>) = try {
-    liveness = true
+    LIVENESS_MONITOR.enable()
     val resources = ConcurrentLinkedDeque<Pair<String, () -> Unit>>()
 
     Runtime.getRuntime().addShutdownHook(thread(start = false, name = "shutdown-hook") {
@@ -90,8 +93,8 @@ fun main(args: Array<String>) = try {
         type("Microservice")
     }).id
 
-    val onEvent = { event: Event ->
-        eventRouter.storeEvent(event, rootEventId)
+    val onEvent = { event: Event, parentId: EventID? ->
+        eventRouter.storeEvent(event, parentId?.id ?: rootEventId)
     }
 
     val onBatchProxy = when (val size = settings.maxOutputQueueSize) {
@@ -100,7 +103,7 @@ fun main(args: Array<String>) = try {
             resources += "sender" to thread(name = "sender") {
                 while (!Thread.interrupted()) {
                     take().runCatching(onBatch).getOrElse {
-                        onEvent(errorEvent("Failed to send message batch", it))
+                        onEvent(errorEvent("Failed to send message batch", it), null)
                         LOGGER.error(it) { "Failed to send message batch" }
                     }
                 }
@@ -121,13 +124,13 @@ fun main(args: Array<String>) = try {
 
     commonFactory.grpcRouter.startServer(service).run {
         start()
-        readiness = true
+        READINESS_MONITOR.enable()
         LOGGER.info { "Successfully started" }
         awaitTermination()
         LOGGER.info { "Finished running" }
     }
 } catch (e: Exception) {
-    readiness = false
+    READINESS_MONITOR.disable()
     LOGGER.error(e) { "Uncaught exception. Shutting down" }
     exitProcess(1)
 }
