@@ -168,7 +168,7 @@ dependencies {
     api platform('com.exactpro.th2:bom:3.2.0')
 
     implementation 'com.exactpro.th2:common:3.40.0'
-    implementation 'com.exactpro.th2:grpc-woodpecker:0.1.1-th2-4242-3129291429-SNAPSHOT'
+    implementation 'com.exactpro.th2:grpc-woodpecker:0.2.0-th2-4242-3134553845-SNAPSHOT'
 
     implementation group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib-jdk8'
     implementation group: 'org.jetbrains.kotlin', name: 'kotlin-reflect'

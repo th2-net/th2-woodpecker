@@ -1,4 +1,4 @@
-# th2-woodpecker (1.0.5)
+# th2-woodpecker (1.1.0)
 
 Library that serves as an API for the implementations of th2 load generation tool «Woodpecker».
 
@@ -17,7 +17,7 @@ Following graph illustrates how load is distributed in time depending on its rat
 
 ## Release Notes
 
-### 1.0.7
+### 1.1.0
 
 + Attach events to the specified parent event ID during generation (if any was provided in the initial request)
 

@@ -73,7 +73,7 @@ class Service(
             settings.isFailure -> failure("Cannot load settings: ${settings.exceptionOrNull()?.message}")
             else -> with(settings.getOrNull()) {
                 onStart(this)
-                parentEventID = request.parentIdOrNull
+                parentEventID = request.eventIdOrNull
                 future = executor.startLoad { rate / tickRate }
                 success("Started load at constant rate: $rate mps", SettingsBody(this))
             }
@@ -94,7 +94,7 @@ class Service(
             invalidSettings != null -> failure("Cannot load step (${invalidSettings.first.toHuman()}) settings: ${invalidSettings.second?.message}")
             !future.isDone -> failure("Load is already running")
             else -> {
-                parentEventID = request.parentIdOrNull
+                parentEventID = request.eventIdOrNull
                 future = executor.startLoad(steps.toRates(cycles)::next)
                 success("Started $cycles cycles of load steps: ${steps.toHuman()}")
             }
@@ -230,10 +230,10 @@ class Service(
             }
         }.apply(::execute)
 
-        private val StartRequest.parentIdOrNull: EventID?
+        private val StartRequest.eventIdOrNull: EventID?
             get() = if (hasParentEventId()) parentEventId else null
 
-        private val ScheduleRequest.parentIdOrNull: EventID?
+        private val ScheduleRequest.eventIdOrNull: EventID?
             get() = if (hasParentEventId()) parentEventId else null
     }
 }
