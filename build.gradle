@@ -167,7 +167,7 @@ clean {
 dependencies {
     api platform('com.exactpro.th2:bom:3.2.0')
 
-    implementation 'com.exactpro.th2:common:3.40.0'
+    implementation 'com.exactpro.th2:common:3.41.1'
     implementation 'com.exactpro.th2:grpc-woodpecker:0.2.0'
 
     implementation group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib-jdk8'
