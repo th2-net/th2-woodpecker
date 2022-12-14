@@ -1,4 +1,4 @@
-# th2-woodpecker (1.1.0)
+# th2-woodpecker (1.2.0)
 
 Library that serves as an API for the implementations of th2 load generation tool «Woodpecker».
 
@@ -16,6 +16,10 @@ Following graph illustrates how load is distributed in time depending on its rat
 ![](doc/img/load-distribution.svg "Load distribution")
 
 ## Release Notes
+
+### 1.2.0
+
++ allow overriding `tickRate` and `maxBatchSize` for each load run (by specifying corresponding properties in `StartLoad` and `Step` messages)
 
 ### 1.1.0
 

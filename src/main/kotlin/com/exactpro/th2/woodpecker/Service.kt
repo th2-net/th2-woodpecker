@@ -18,6 +18,7 @@ package com.exactpro.th2.woodpecker
 
 import com.exactpro.th2.common.event.Event
 import com.exactpro.th2.common.event.IBodyData
+import com.exactpro.th2.common.grpc.EventID
 import com.exactpro.th2.common.grpc.MessageGroup
 import com.exactpro.th2.common.grpc.MessageGroupBatch
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
@@ -40,7 +41,8 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeUnit.MILLISECONDS
 import java.util.concurrent.TimeUnit.NANOSECONDS
-import com.exactpro.th2.common.grpc.EventID
+import java.util.concurrent.TimeUnit.SECONDS
+import java.util.concurrent.locks.LockSupport
 
 class Service(
     private val tickRate: Int,
@@ -54,8 +56,8 @@ class Service(
 ) : WoodpeckerImplBase(), AutoCloseable {
     private val logger = KotlinLogging.logger {}
     private val executor = Executors.newSingleThreadScheduledExecutor()
-    private var future: Future<*> = CompletableFuture.completedFuture(null)
-    private var parentEventID: EventID? = null
+    @Volatile private var future: Future<*> = CompletableFuture.completedFuture(null)
+    @Volatile private var parentEventId: EventID? = null
 
     init {
         check(tickRate > 0) { "Invalid ${::tickRate.name} (<= 0): $tickRate" }
@@ -65,6 +67,8 @@ class Service(
     @Synchronized
     override fun start(request: StartRequest, observer: StreamObserver<Response>) = observer {
         val rate = request.rate
+        val tickRate = request.tickRate.takeIf { it > 0 } ?: tickRate
+        val maxBatchSize = request.maxBatchSize.takeIf { it > 0 } ?: maxBatchSize
         val settings = runCatching { request.settings.readSettings() }
 
         when {
@@ -73,9 +77,9 @@ class Service(
             settings.isFailure -> failure("Cannot load settings: ${settings.exceptionOrNull()?.message}")
             else -> with(settings.getOrNull()) {
                 onStart(this)
-                parentEventID = request.eventIdOrNull
-                future = executor.startLoad { rate / tickRate }
-                success("Started load at constant rate: $rate mps", SettingsBody(this))
+                parentEventId = request.eventIdOrNull
+                future = executor.scheduleWithMinDelay(1, SECONDS) { generateLoad(rate, tickRate, maxBatchSize) }
+                success("Started load at constant rate - rate: $rate mps, tick-rate: $tickRate, max batch size: $maxBatchSize", SettingsBody(this))
             }
         }
     }
@@ -84,18 +88,18 @@ class Service(
     override fun schedule(request: ScheduleRequest, observer: StreamObserver<Response>) = observer {
         val cycles = request.cycles
         val steps = request.stepsList
-        val invalidStep = steps.firstOrNull { it.duration < 1 || it.rate < tickRate }
+        val invalidStep = steps.firstOrNull { step -> step.duration < 1 || step.rate < (step.tickRate.takeIf { it > 0 } ?: tickRate) }
         val invalidSettings = steps.map { it to it.settings.runCatching { readSettings() }.exceptionOrNull() }.firstOrNull { it.second != null }
 
         when {
             cycles < 1 -> failure("Amount of cycles is less than 1: $cycles")
             steps.isEmpty() -> failure("There are no steps")
-            invalidStep != null -> failure("Invalid step (duration < 1s or rate < tick-rate ($tickRate): ${invalidStep.toHuman()}")
+            invalidStep != null -> failure("Invalid step (duration < 1s or rate < tick-rate): ${invalidStep.toHuman()}")
             invalidSettings != null -> failure("Cannot load step (${invalidSettings.first.toHuman()}) settings: ${invalidSettings.second?.message}")
             !future.isDone -> failure("Load is already running")
             else -> {
-                parentEventID = request.eventIdOrNull
-                future = executor.startLoad(steps.toRates(cycles)::next)
+                parentEventId = request.eventIdOrNull
+                future = executor.submit { generateLoad(steps, cycles) }
                 success("Started $cycles cycles of load steps: ${steps.toHuman()}")
             }
         }
@@ -108,7 +112,7 @@ class Service(
             !future.cancel(true) -> failure("Failed to stop load")
             else -> success("Successfully stopped load").also {
                 onStop()
-                parentEventID = null
+                parentEventId = null
             }
         }
     }
@@ -128,11 +132,15 @@ class Service(
         logger.info { "Closed" }
     }
 
-    private fun List<Step>.toRates(cycles: Int) = iterator {
+    private fun generateLoad(steps: List<Step>, cycles: Int) {
         repeat(cycles) { cycle ->
+            if (future.isCancelled) return
+
             onInfo("Started load cycle ${cycle + 1}")
 
-            forEach { step ->
+            steps.forEach { step ->
+                if (future.isCancelled) return
+
                 val settings = step.settings.readSettings()
 
                 settings.runCatching(onStart).getOrElse {
@@ -140,9 +148,14 @@ class Service(
                     throw it
                 }
 
-                onInfo("Started load step: ${step.toHuman()}", SettingsBody(settings))
-                repeat(step.duration * tickRate) { yield(step.rate / tickRate) }
-                onInfo("Finished load step: ${step.toHuman()}")
+                onInfo("Started load step - ${step.toHuman()}", SettingsBody(settings))
+
+                repeat(step.duration) {
+                    if (future.isCancelled) return
+                    generateLoad(step.rate, step.tickRate, step.maxBatchSize)
+                }
+
+                onInfo("Finished load step - ${step.toHuman()}")
 
                 runCatching(onStop).getOrElse {
                     onError("Failed to execute onStop handler", it)
@@ -164,24 +177,24 @@ class Service(
         throw it
     }
 
-    private fun generateLoad(rate: () -> Int) = Runnable {
-        rate().toSizes(maxBatchSize).forEach(::generateBatch)
+    private fun generateLoad(rate: Int, tickRate: Int, maxBatchSize: Int) = repeat(tickRate) {
+        if (future.isCancelled) return
+        val deadline = System.nanoTime() + SECONDS.toNanos(1) / tickRate
+        val messages = rate / tickRate
+        repeat(messages / maxBatchSize) { generateBatch(maxBatchSize) }
+        val messagesLeft = messages % maxBatchSize
+        if (messagesLeft > 0) generateBatch(messagesLeft)
+        while (deadline > System.nanoTime()) LockSupport.parkNanos(deadline - System.nanoTime())
     }
-
-    private fun ScheduledExecutorService.startLoad(rate: () -> Int) = scheduleWithMinDelay(
-        1000L / tickRate,
-        MILLISECONDS,
-        generateLoad(rate)
-    )
 
     private fun onInfo(event: String, description: IBodyData? = null) {
         logger.info(event)
-        onEvent(infoEvent(event, description), parentEventID)
+        onEvent(infoEvent(event, description), parentEventId)
     }
 
     private fun onError(event: String, cause: Throwable? = null) {
         logger.error(event, cause)
-        onEvent(errorEvent(event, cause), parentEventID)
+        onEvent(errorEvent(event, cause), parentEventId)
     }
 
     private fun success(event: String, description: IBodyData? = null): Response {
@@ -209,14 +222,8 @@ class Service(
     companion object {
         private const val CLOSE_TIMEOUT_MS = 5000L
 
-        private fun Step.toHuman() = "${duration}s at $rate mps"
-        private fun List<Step>.toHuman() = joinToString { it.toHuman() }
-
-        private fun Int.toSizes(maxSize: Int) = iterator {
-            repeat(this@toSizes / maxSize) { yield(maxSize) }
-            val rest = this@toSizes % maxSize
-            if (rest > 0) yield(rest)
-        }
+        private fun Step.toHuman() = "rate: $rate mps, duration: $duration s, tick-rate: $tickRate, max batch size: $maxBatchSize"
+        private fun List<Step>.toHuman() = joinToString { "(${it.toHuman()})" }
 
         private fun ScheduledExecutorService.scheduleWithMinDelay(
             delay: Long,
