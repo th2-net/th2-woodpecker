@@ -165,7 +165,7 @@ clean {
 }
 
 dependencies {
-    api platform('com.exactpro.th2:bom:3.2.0')
+    api platform('com.exactpro.th2:bom:4.0.2')
 
     implementation 'com.exactpro.th2:common:3.40.0'
     implementation 'com.exactpro.th2:grpc-woodpecker:0.3.0'
