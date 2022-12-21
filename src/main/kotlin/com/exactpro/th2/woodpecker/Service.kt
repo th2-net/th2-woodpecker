@@ -152,7 +152,9 @@ class Service(
 
                 repeat(step.duration) {
                     if (future.isCancelled) return
-                    generateLoad(step.rate, step.tickRate, step.maxBatchSize)
+                    val tickRate = step.tickRate.takeIf { it > 0 } ?: tickRate
+                    val maxBatchSize = step.maxBatchSize.takeIf { it > 0 } ?: maxBatchSize
+                    generateLoad(step.rate, tickRate, maxBatchSize)
                 }
 
                 onInfo("Finished load step - ${step.toHuman()}")
