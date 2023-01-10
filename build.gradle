@@ -177,3 +177,7 @@ dependencies {
 
     testImplementation group: 'org.jetbrains.kotlin', name: 'kotlin-test-junit5'
 }
+
+dependencyLocking {    
+    lockAllConfigurations()
+}
