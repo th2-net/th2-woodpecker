@@ -19,10 +19,11 @@
 package com.exactpro.th2.woodpecker
 
 import com.exactpro.th2.common.event.Event
+import com.exactpro.th2.common.grpc.EventID
 import com.exactpro.th2.common.grpc.MessageGroup
 import com.exactpro.th2.common.grpc.MessageGroupBatch
-import com.exactpro.th2.common.metrics.liveness
-import com.exactpro.th2.common.metrics.readiness
+import com.exactpro.th2.common.metrics.LIVENESS_MONITOR
+import com.exactpro.th2.common.metrics.READINESS_MONITOR
 import com.exactpro.th2.common.schema.factory.CommonFactory
 import com.exactpro.th2.common.schema.message.storeEvent
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorFactory
@@ -30,6 +31,7 @@ import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
 import com.exactpro.th2.woodpecker.api.impl.MessageGeneratorContext
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
+import com.fasterxml.jackson.module.kotlin.KotlinFeature.NullIsSameAsDefault
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import mu.KotlinLogging
@@ -39,9 +41,6 @@ import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.LinkedBlockingQueue
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
-import com.exactpro.th2.common.grpc.EventID
-import com.exactpro.th2.common.metrics.LIVENESS_MONITOR
-import com.exactpro.th2.common.metrics.READINESS_MONITOR
 
 private val LOGGER = KotlinLogging.logger {}
 
@@ -68,7 +67,7 @@ fun main(args: Array<String>) = try {
     val generatorFactory = load<IMessageGeneratorFactory<IMessageGeneratorSettings>>()
 
     val mapper = JsonMapper.builder()
-        .addModule(KotlinModule(nullIsSameAsDefault = true))
+        .addModule(KotlinModule.Builder().configure(NullIsSameAsDefault, true).build())
         .addModule(SimpleModule().addAbstractTypeMapping(IMessageGeneratorSettings::class.java, generatorFactory.settingsClass))
         .build()
 

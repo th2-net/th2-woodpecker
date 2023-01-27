@@ -165,15 +165,15 @@ clean {
 }
 
 dependencies {
-    api platform('com.exactpro.th2:bom:3.2.0')
+    api platform('com.exactpro.th2:bom:4.1.0')
 
-    implementation 'com.exactpro.th2:common:3.40.0'
+    implementation 'com.exactpro.th2:common:3.44.0'
     implementation 'com.exactpro.th2:grpc-woodpecker:0.3.0'
 
     implementation group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib-jdk8'
     implementation group: 'org.jetbrains.kotlin', name: 'kotlin-reflect'
     implementation group: 'io.github.microutils', name: 'kotlin-logging', version: '2.1.21'
-    implementation group: 'com.fasterxml.jackson.module', name: 'jackson-module-kotlin', version: '2.11.2'
+    implementation group: 'com.fasterxml.jackson.module', name: 'jackson-module-kotlin', version: '2.14.0'
 
     testImplementation group: 'org.jetbrains.kotlin', name: 'kotlin-test-junit5'
 }
