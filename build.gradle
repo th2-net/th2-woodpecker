@@ -14,12 +14,10 @@ targetCompatibility = 11
 
 compileKotlin.kotlinOptions {
     jvmTarget = '11'
-    freeCompilerArgs += '-XXLanguage:+UnitConversion'
 }
 
 compileTestKotlin.kotlinOptions {
     jvmTarget = '11'
-    freeCompilerArgs += '-XXLanguage:+UnitConversion'
 }
 
 repositories {
