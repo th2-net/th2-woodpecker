@@ -3,10 +3,7 @@ plugins {
     id 'signing'
     id 'org.jetbrains.kotlin.jvm' version "${kotlin_version}"
     id "io.github.gradle-nexus.publish-plugin" version '1.0.0'
-}
-
-ext {
-    sharedDir = file("${project.rootDir}/shared")
+    id "org.owasp.dependencycheck" version "8.1.2"
 }
 
 group = 'com.exactpro.th2'
@@ -126,11 +123,6 @@ publishing {
     }
 
     repositories {
-        maven {
-            name = 'localRepo'
-            url = sharedDir
-        }
-
         //Nexus repo to publish from gitlab
         maven {
             name = 'nexusRepository'
@@ -160,17 +152,12 @@ signing {
     sign publishing.publications.mavenJava
 }
 
-clean {
-    delete sharedDir
-}
-
 dependencies {
-    api platform('com.exactpro.th2:bom:4.1.0')
+    api platform('com.exactpro.th2:bom:4.2.0')
 
-    implementation 'com.exactpro.th2:common:3.44.0'
-    implementation 'com.exactpro.th2:grpc-woodpecker:0.3.0'
+    implementation 'com.exactpro.th2:common:5.2.0-dev'
+    implementation 'com.exactpro.th2:grpc-woodpecker:2.0.0-dev'
 
-    implementation group: 'org.jetbrains.kotlin', name: 'kotlin-stdlib-jdk8'
     implementation group: 'org.jetbrains.kotlin', name: 'kotlin-reflect'
     implementation group: 'io.github.microutils', name: 'kotlin-logging', version: '2.1.21'
     implementation group: 'com.fasterxml.jackson.module', name: 'jackson-module-kotlin', version: '2.14.0'

@@ -35,7 +35,6 @@ import com.fasterxml.jackson.module.kotlin.KotlinFeature.NullIsSameAsDefault
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import mu.KotlinLogging
-import java.time.Instant
 import java.util.ServiceLoader
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.LinkedBlockingQueue
@@ -87,13 +86,10 @@ fun main(args: Array<String>) = try {
         throw IllegalStateException("Failed to subscribe to input queue", it)
     }
 
-    val rootEventId = eventRouter.storeEvent(Event.start().apply {
-        name("Woodpecker '${generator::class.simpleName}' ${Instant.now()}")
-        type("Microservice")
-    }).id
+    val rootEventId: EventID = commonFactory.rootEventId
 
-    val onEvent = { event: Event, parentId: EventID? ->
-        eventRouter.storeEvent(event, parentId?.id ?: rootEventId)
+    val onEvent: (Event, EventID?) -> Unit = { event: Event, parentId: EventID? ->
+        eventRouter.storeEvent(event, parentId ?: rootEventId)
     }
 
     val onBatchProxy = when (val size = settings.maxOutputQueueSize) {
