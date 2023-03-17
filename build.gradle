@@ -168,6 +168,10 @@ configurations {
     }
 }
 
+test {
+    useJUnitPlatform()
+}
+
 dependencyCheck {
     formats=['SARIF', 'JSON', 'HTML']
     failBuildOnCVSS=5

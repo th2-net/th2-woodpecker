@@ -1,18 +1,20 @@
-name: Dev build and publish Java distributions to sonatype snapshot repository
+name: Build and publish dev-release Java distributions to sonatype.
 
 on:
+  workflow_dispatch:
   push:
-    branches-ignore:
-      - master
-      - version-*
+    branches:
       - dev-version-*
+    paths:
+      - gradle.properties
 
 jobs:
-  build-job:
-    uses: th2-net/.github/.github/workflows/compound-java-dev.yml@main
+  build:
+    uses: th2-net/.github/.github/workflows/compound-java.yml@main
     with:
       build-target: 'Sonatype'
       runsOn: ubuntu-latest
+      devRelease: true
     secrets:
       sonatypeUsername: ${{ secrets.SONATYPE_NEXUS_USERNAME }}
       sonatypePassword: ${{ secrets.SONATYPE_NEXUS_PASSWORD }}

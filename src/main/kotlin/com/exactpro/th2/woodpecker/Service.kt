@@ -19,7 +19,6 @@ package com.exactpro.th2.woodpecker
 import com.exactpro.th2.common.event.Event
 import com.exactpro.th2.common.event.IBodyData
 import com.exactpro.th2.common.grpc.EventID
-import com.exactpro.th2.common.grpc.MessageGroup
 import com.exactpro.th2.common.grpc.MessageGroupBatch
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
 import com.exactpro.th2.woodpecker.grpc.Response
@@ -49,7 +48,7 @@ class Service(
     private val maxBatchSize: Int,
     private val readSettings: (String) -> IMessageGeneratorSettings,
     private val onStart: (IMessageGeneratorSettings?) -> Unit,
-    private val onNext: () -> MessageGroup,
+    private val onNext: (Int) -> MessageGroupBatch,
     private val onStop: () -> Unit,
     private val onBatch: (MessageGroupBatch) -> Unit,
     private val onEvent: (Event, EventID?) -> Unit,
@@ -171,9 +170,8 @@ class Service(
         onInfo("Load sequence has been completed")
     }
 
-    private fun generateBatch(size: Int) = MessageGroupBatch.newBuilder().runCatching {
-        repeat(size) { addGroups(onNext()) }
-        onBatch(build())
+    private fun generateBatch(size: Int) = runCatching {
+        onBatch(onNext(size))
     }.getOrElse {
         onError("Failed to send $size messages", it)
         throw it
