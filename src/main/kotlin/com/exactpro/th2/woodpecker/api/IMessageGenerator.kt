@@ -17,12 +17,13 @@
 package com.exactpro.th2.woodpecker.api
 
 import com.exactpro.th2.common.grpc.MessageGroup
+import com.exactpro.th2.common.grpc.MessageGroupBatch
 import javax.annotation.concurrent.ThreadSafe
 
 @ThreadSafe // methods will be called from different threads, but each method will be called from a single thread only
 interface IMessageGenerator<S : IMessageGeneratorSettings> : AutoCloseable {
     fun onStart(settings: S?) = Unit
-    fun onNext(): MessageGroup
+    fun onNext(size: Int): MessageGroupBatch
     fun onResponse(message: MessageGroup) = Unit
     fun onStop() = Unit
     override fun close() = Unit

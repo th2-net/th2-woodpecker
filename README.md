@@ -20,7 +20,12 @@ Following graph illustrates how load is distributed in time depending on its rat
 ### 2.0.0
 
 + Migrate to book & page concept
+
++ Changed IMessageGenerator interface without backward compatible. 
+  The onNext method takes batch size argument and returns MessageGroupBatch  
+
 + Added owasp plugin to check vulnerabilities
+
 + Updated bom to version 4.2.0
 + Updated common to version 5.2.0-dev
 + Updated grpc woodpecker to version 2.0.0-dev
