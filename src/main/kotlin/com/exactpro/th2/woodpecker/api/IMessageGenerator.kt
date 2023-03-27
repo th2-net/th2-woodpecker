@@ -18,12 +18,15 @@ package com.exactpro.th2.woodpecker.api
 
 import com.exactpro.th2.common.grpc.MessageGroup
 import com.exactpro.th2.common.grpc.MessageGroupBatch
+import com.exactpro.th2.common.schema.message.impl.rabbitmq.demo.DemoMessageBatch
+import java.lang.UnsupportedOperationException
 import javax.annotation.concurrent.ThreadSafe
 
 @ThreadSafe // methods will be called from different threads, but each method will be called from a single thread only
 interface IMessageGenerator<S : IMessageGeneratorSettings> : AutoCloseable {
     fun onStart(settings: S?) = Unit
-    fun onNext(size: Int): MessageGroupBatch
+    fun onNext(size: Int): MessageGroupBatch { throw UnsupportedOperationException() }
+    fun onNextDemo(size: Int): DemoMessageBatch { throw UnsupportedOperationException() }
     fun onResponse(message: MessageGroup) = Unit
     fun onStop() = Unit
     override fun close() = Unit

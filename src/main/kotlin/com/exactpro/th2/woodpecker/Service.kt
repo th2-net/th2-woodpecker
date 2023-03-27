@@ -19,7 +19,6 @@ package com.exactpro.th2.woodpecker
 import com.exactpro.th2.common.event.Event
 import com.exactpro.th2.common.event.IBodyData
 import com.exactpro.th2.common.grpc.EventID
-import com.exactpro.th2.common.grpc.MessageGroupBatch
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
 import com.exactpro.th2.woodpecker.grpc.Response
 import com.exactpro.th2.woodpecker.grpc.Response.Status.FAILURE
@@ -43,14 +42,14 @@ import java.util.concurrent.TimeUnit.NANOSECONDS
 import java.util.concurrent.TimeUnit.SECONDS
 import java.util.concurrent.locks.LockSupport
 
-class Service(
+class Service<T>(
     private val tickRate: Int,
     private val maxBatchSize: Int,
     private val readSettings: (String) -> IMessageGeneratorSettings,
     private val onStart: (IMessageGeneratorSettings?) -> Unit,
-    private val onNext: (Int) -> MessageGroupBatch,
+    private val onNext: (Int) -> T,
     private val onStop: () -> Unit,
-    private val onBatch: (MessageGroupBatch) -> Unit,
+    private val onBatch: (T) -> Unit,
     private val onEvent: (Event, EventID?) -> Unit,
 ) : WoodpeckerImplBase(), AutoCloseable {
     private val logger = KotlinLogging.logger {}

@@ -25,6 +25,7 @@ import com.exactpro.th2.common.grpc.MessageGroupBatch
 import com.exactpro.th2.common.metrics.LIVENESS_MONITOR
 import com.exactpro.th2.common.metrics.READINESS_MONITOR
 import com.exactpro.th2.common.schema.factory.CommonFactory
+import com.exactpro.th2.common.schema.message.impl.rabbitmq.demo.DemoMessageBatch
 import com.exactpro.th2.common.schema.message.storeEvent
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorFactory
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
@@ -35,7 +36,7 @@ import com.fasterxml.jackson.module.kotlin.KotlinFeature.NullIsSameAsDefault
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import mu.KotlinLogging
-import java.util.ServiceLoader
+import java.util.*
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.LinkedBlockingQueue
 import kotlin.concurrent.thread
@@ -43,8 +44,11 @@ import kotlin.system.exitProcess
 
 private val LOGGER = KotlinLogging.logger {}
 
-private const val INPUT_QUEUE_ATTRIBUTE = "in"
-private const val OUTPUT_QUEUE_ATTRIBUTE = "out"
+private const val MSG_GROUP_QUEUE_ATTRIBUTE = "group"
+private const val DEMO_MSG_QUEUE_ATTRIBUTE = "demo_raw"
+private val INPUT_MSG_GROUP_QUEUE_ATTRIBUTE = arrayOf(MSG_GROUP_QUEUE_ATTRIBUTE, "in")
+private val OUTPUT_MSG_GROUP_QUEUE_ATTRIBUTE = arrayOf(MSG_GROUP_QUEUE_ATTRIBUTE, "out")
+private val OUTPUT_DEMO_MSG_QUEUE_ATTRIBUTE = arrayOf(DEMO_MSG_QUEUE_ATTRIBUTE, "out")
 
 fun main(args: Array<String>) = try {
     LIVENESS_MONITOR.enable()
@@ -62,7 +66,8 @@ fun main(args: Array<String>) = try {
 
     val commonFactory = CommonFactory.createFromArguments(*args).apply { resources += "factory" to ::close }
     val eventRouter = commonFactory.eventBatchRouter
-    val messageRouter = commonFactory.messageRouterMessageGroupBatch
+    val messageGroupRouter = commonFactory.messageRouterMessageGroupBatch
+    val demoMessageRouter = commonFactory.demoMessageBatchRouter
     val generatorFactory = load<IMessageGeneratorFactory<IMessageGeneratorSettings>>()
 
     val mapper = JsonMapper.builder()
@@ -70,16 +75,17 @@ fun main(args: Array<String>) = try {
         .addModule(SimpleModule().addAbstractTypeMapping(IMessageGeneratorSettings::class.java, generatorFactory.settingsClass))
         .build()
 
-    val onBatch = { batch: MessageGroupBatch -> messageRouter.sendAll(batch, OUTPUT_QUEUE_ATTRIBUTE) }
+    val onBatch = { batch: MessageGroupBatch -> messageGroupRouter.sendAll(batch, *OUTPUT_MSG_GROUP_QUEUE_ATTRIBUTE) }
+    val onDemoBatch = { batch: DemoMessageBatch -> demoMessageRouter.sendAll(batch, *OUTPUT_DEMO_MSG_QUEUE_ATTRIBUTE) }
     val onRequest = { message: MessageGroup -> onBatch(MessageGroupBatch.newBuilder().addGroups(message).build()) }
     val settings = commonFactory.getCustomConfiguration(Settings::class.java, mapper)
     val context = MessageGeneratorContext(settings.generatorSettings, onRequest, commonFactory::loadDictionary)
     val generator = generatorFactory.createGenerator(context).apply { resources += "generator" to ::close }
 
     runCatching {
-        checkNotNull(messageRouter.subscribe({ _, batch ->
+        checkNotNull(messageGroupRouter.subscribe({ _, batch ->
             batch.groupsList.forEach(generator::onResponse)
-        }, INPUT_QUEUE_ATTRIBUTE))
+        }, *INPUT_MSG_GROUP_QUEUE_ATTRIBUTE))
     }.onSuccess { monitor ->
         resources += "subscriber-monitor" to monitor::unsubscribe
     }.onFailure {
@@ -92,30 +98,33 @@ fun main(args: Array<String>) = try {
         eventRouter.storeEvent(event, parentId ?: rootEventId)
     }
 
-    val onBatchProxy = when (val size = settings.maxOutputQueueSize) {
-        0 -> onBatch
-        else -> LinkedBlockingQueue<MessageGroupBatch>(size).apply {
-            resources += "sender" to thread(name = "sender") {
-                while (!Thread.interrupted()) {
-                    take().runCatching(onBatch).getOrElse {
-                        onEvent(errorEvent("Failed to send message batch", it), null)
-                        LOGGER.error(it) { "Failed to send message batch" }
-                    }
-                }
-            }::interrupt
-        }::put
-    }
+    val service = if (settings.useDemoMode) {
+        val onBatchProxy = createBatchProxy(settings, resources, onEvent, onDemoBatch)
 
-    val service = Service(
-        settings.tickRate,
-        settings.maxBatchSize,
-        mapper::readValue,
-        generator::onStart,
-        generator::onNext,
-        generator::onStop,
-        onBatchProxy,
-        onEvent
-    ).apply { resources += "service" to ::close }
+        Service(
+            settings.tickRate,
+            settings.maxBatchSize,
+            mapper::readValue,
+            generator::onStart,
+            generator::onNextDemo,
+            generator::onStop,
+            onBatchProxy,
+            onEvent
+        )
+    } else {
+        val onBatchProxy = createBatchProxy(settings, resources, onEvent, onBatch)
+
+        Service(
+            settings.tickRate,
+            settings.maxBatchSize,
+            mapper::readValue,
+            generator::onStart,
+            generator::onNext,
+            generator::onStop,
+            onBatchProxy,
+            onEvent
+        )
+    }.apply { resources += "service" to ::close }
 
     commonFactory.grpcRouter.startServer(service).run {
         start()
@@ -130,10 +139,30 @@ fun main(args: Array<String>) = try {
     exitProcess(1)
 }
 
+private fun <T> createBatchProxy(
+    settings: Settings,
+    resources: Deque<Pair<String, () -> Unit>>,
+    onEvent: (Event, EventID?) -> Unit,
+    onBatch: (T) -> Unit
+): (T) -> Unit = when (val size = settings.maxOutputQueueSize) {
+    0 -> onBatch
+    else -> LinkedBlockingQueue<T>(size).apply {
+        resources += "sender" to thread(name = "sender") {
+            while (!Thread.interrupted()) {
+                take().runCatching(onBatch).getOrElse {
+                    onEvent(errorEvent("Failed to send message batch", it), null)
+                    LOGGER.error(it) { "Failed to send message batch" }
+                }
+            }
+        }::interrupt
+    }::put
+}
+
 data class Settings(
     val tickRate: Int = 10,
     val maxBatchSize: Int = 1000,
     val maxOutputQueueSize: Int = 0,
+    val useDemoMode: Boolean = false,
     val generatorSettings: IMessageGeneratorSettings,
 ) {
     init {
