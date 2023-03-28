@@ -152,7 +152,7 @@ signing {
 dependencies {
     api platform('com.exactpro.th2:bom:4.2.0')
 
-    implementation 'com.exactpro.th2:common:5.2.0-separate-executor-4529851244-8ba6027-SNAPSHOT'
+    implementation 'com.exactpro.th2:common:5.2.0-separate-executor-4540494014-0b4ad85-SNAPSHOT'
     implementation 'com.exactpro.th2:grpc-woodpecker:2.0.0-dev'
 
     implementation group: 'org.apache.commons', name: 'commons-lang3'

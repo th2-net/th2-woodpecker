@@ -25,7 +25,7 @@ import com.exactpro.th2.common.grpc.MessageGroupBatch
 import com.exactpro.th2.common.metrics.LIVENESS_MONITOR
 import com.exactpro.th2.common.metrics.READINESS_MONITOR
 import com.exactpro.th2.common.schema.factory.CommonFactory
-import com.exactpro.th2.common.schema.message.impl.rabbitmq.demo.DemoMessageBatch
+import com.exactpro.th2.common.schema.message.impl.rabbitmq.demo.DemoGroupBatch
 import com.exactpro.th2.common.schema.message.storeEvent
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorFactory
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
@@ -76,7 +76,7 @@ fun main(args: Array<String>) = try {
         .build()
 
     val onBatch = { batch: MessageGroupBatch -> messageGroupRouter.sendAll(batch, *OUTPUT_MSG_GROUP_QUEUE_ATTRIBUTE) }
-    val onDemoBatch = { batch: DemoMessageBatch -> demoMessageRouter.sendAll(batch, *OUTPUT_DEMO_MSG_QUEUE_ATTRIBUTE) }
+    val onDemoBatch = { batch: DemoGroupBatch -> demoMessageRouter.sendAll(batch, *OUTPUT_DEMO_MSG_QUEUE_ATTRIBUTE) }
     val onRequest = { message: MessageGroup -> onBatch(MessageGroupBatch.newBuilder().addGroups(message).build()) }
     val settings = commonFactory.getCustomConfiguration(Settings::class.java, mapper)
     val context = MessageGeneratorContext(settings.generatorSettings, onRequest, commonFactory::loadDictionary)
