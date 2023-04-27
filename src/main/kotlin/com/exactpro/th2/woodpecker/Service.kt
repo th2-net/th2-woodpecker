@@ -221,7 +221,7 @@ class Service<T>(
     companion object {
         private const val CLOSE_TIMEOUT_MS = 5000L
 
-        private fun Step.toHuman() = "rate: $rate mps, duration: $duration s, tick-rate: $tickRate, max batch size: $maxBatchSize"
+        private fun Step.toHuman() = "rate: $rate mps, duration: $duration s, tick-rate: $tickRate, max batch size: $maxBatchSize, settings: $settings"
         private fun List<Step>.toHuman() = joinToString { "(${it.toHuman()})" }
 
         private fun ScheduledExecutorService.scheduleWithMinDelay(

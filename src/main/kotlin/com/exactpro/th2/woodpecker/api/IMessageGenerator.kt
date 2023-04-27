@@ -26,7 +26,7 @@ import javax.annotation.concurrent.ThreadSafe
 interface IMessageGenerator<S : IMessageGeneratorSettings> : AutoCloseable {
     fun onStart(settings: S?) = Unit
     fun onNext(size: Int): MessageGroupBatch { throw UnsupportedOperationException() }
-    fun onNextDemo(size: Int): GroupBatch { throw UnsupportedOperationException() }
+    fun onNextTransport(size: Int): GroupBatch { throw UnsupportedOperationException() }
     fun onResponse(message: MessageGroup) = Unit
     fun onStop() = Unit
     override fun close() = Unit

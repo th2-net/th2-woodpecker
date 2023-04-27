@@ -7,7 +7,7 @@ Library that serves as an API for the implementations of th2 load generation too
 *tickRate* - how many times per second message batches will be generated (`10` by default)  
 *maxBatchSize* - maximum size of a produced batch (`1000` by default)  
 *maxOutputQueueSize* - size of the output queue for async batch sending (`0` by default = sync sending)
-*useDemoMode* - use th2 binary transport protocol or protobuf protocol. Default value is `false`
+*useTransportMode* - use th2 transport protocol or protobuf protocol. Default value is `false`
 *generatorSettings* - message generator implementation settings
 
 ## Load distribution

@@ -26,6 +26,7 @@ import com.exactpro.th2.common.metrics.LIVENESS_MONITOR
 import com.exactpro.th2.common.metrics.READINESS_MONITOR
 import com.exactpro.th2.common.schema.factory.CommonFactory
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.GroupBatch
+import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.TransportGroupBatchRouter
 import com.exactpro.th2.common.schema.message.storeEvent
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorFactory
 import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
@@ -44,11 +45,10 @@ import kotlin.system.exitProcess
 
 private val LOGGER = KotlinLogging.logger {}
 
-private const val MSG_GROUP_QUEUE_ATTRIBUTE = "group"
-private const val DEMO_MSG_QUEUE_ATTRIBUTE = "demo_raw"
+private const val MSG_GROUP_QUEUE_ATTRIBUTE = "protobuf-group"
 private val INPUT_MSG_GROUP_QUEUE_ATTRIBUTE = arrayOf(MSG_GROUP_QUEUE_ATTRIBUTE, "in")
 private val OUTPUT_MSG_GROUP_QUEUE_ATTRIBUTE = arrayOf(MSG_GROUP_QUEUE_ATTRIBUTE, "out")
-private val OUTPUT_DEMO_MSG_QUEUE_ATTRIBUTE = arrayOf(DEMO_MSG_QUEUE_ATTRIBUTE, "out")
+private val OUTPUT_TRANSPORT_MSG_QUEUE_ATTRIBUTE = arrayOf(TransportGroupBatchRouter.TRANSPORT_GROUP_ATTRIBUTE, "out")
 
 fun main(args: Array<String>) = try {
     LIVENESS_MONITOR.enable()
@@ -75,9 +75,9 @@ fun main(args: Array<String>) = try {
         .addModule(SimpleModule().addAbstractTypeMapping(IMessageGeneratorSettings::class.java, generatorFactory.settingsClass))
         .build()
 
-    val onBatch = { batch: MessageGroupBatch -> messageGroupRouter.sendAll(batch, *OUTPUT_MSG_GROUP_QUEUE_ATTRIBUTE) }
-    val onDemoBatch = { batch: GroupBatch -> transportMessageRouter.sendAll(batch, *OUTPUT_DEMO_MSG_QUEUE_ATTRIBUTE) }
-    val onRequest = { message: MessageGroup -> onBatch(MessageGroupBatch.newBuilder().addGroups(message).build()) }
+    val onProtoBatch = { batch: MessageGroupBatch -> messageGroupRouter.sendAll(batch, *OUTPUT_MSG_GROUP_QUEUE_ATTRIBUTE) }
+    val onTransportBatch = { batch: GroupBatch -> transportMessageRouter.sendAll(batch, *OUTPUT_TRANSPORT_MSG_QUEUE_ATTRIBUTE) }
+    val onRequest = { message: MessageGroup -> onProtoBatch(MessageGroupBatch.newBuilder().addGroups(message).build()) }
     val settings = commonFactory.getCustomConfiguration(Settings::class.java, mapper)
     val context = MessageGeneratorContext(settings.generatorSettings, onRequest, commonFactory::loadDictionary)
     val generator = generatorFactory.createGenerator(context).apply { resources += "generator" to ::close }
@@ -98,21 +98,21 @@ fun main(args: Array<String>) = try {
         eventRouter.storeEvent(event, parentId ?: rootEventId)
     }
 
-    val service = if (settings.useDemoMode) {
-        val onBatchProxy = createBatchProxy(settings, resources, onEvent, onDemoBatch)
+    val service = if (settings.useTransportMode) {
+        val onBatchProxy = createBatchProxy(settings, resources, onEvent, onTransportBatch)
 
         Service(
             settings.tickRate,
             settings.maxBatchSize,
             mapper::readValue,
             generator::onStart,
-            generator::onNextDemo,
+            generator::onNextTransport,
             generator::onStop,
             onBatchProxy,
             onEvent
         )
     } else {
-        val onBatchProxy = createBatchProxy(settings, resources, onEvent, onBatch)
+        val onBatchProxy = createBatchProxy(settings, resources, onEvent, onProtoBatch)
 
         Service(
             settings.tickRate,
@@ -162,7 +162,7 @@ data class Settings(
     val tickRate: Int = 10,
     val maxBatchSize: Int = 1000,
     val maxOutputQueueSize: Int = 0,
-    val useDemoMode: Boolean = false,
+    val useTransportMode: Boolean = false,
     val generatorSettings: IMessageGeneratorSettings,
 ) {
     init {
