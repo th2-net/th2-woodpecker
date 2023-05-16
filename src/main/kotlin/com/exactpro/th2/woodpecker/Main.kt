@@ -42,6 +42,7 @@ import mu.KotlinLogging
 import java.util.*
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.LinkedBlockingQueue
+import javax.naming.OperationNotSupportedException
 import kotlin.concurrent.thread
 import kotlin.system.exitProcess
 
@@ -52,7 +53,7 @@ private val INPUT_MSG_GROUP_QUEUE_ATTRIBUTE = arrayOf(MSG_GROUP_QUEUE_ATTRIBUTE,
 private val OUTPUT_MSG_GROUP_QUEUE_ATTRIBUTE = arrayOf(MSG_GROUP_QUEUE_ATTRIBUTE, "out")
 private val OUTPUT_TRANSPORT_MSG_QUEUE_ATTRIBUTE = arrayOf(TransportGroupBatchRouter.TRANSPORT_GROUP_ATTRIBUTE, "out")
 
-private const val EVENT_BATCH_QUEUE_ATTRIBUTE = "protobuf-event"
+private const val EVENT_BATCH_QUEUE_ATTRIBUTE = "event"
 private val INPUT_EVENT_BATCH_QUEUE_ATTRIBUTE = arrayOf(EVENT_BATCH_QUEUE_ATTRIBUTE, "in")
 private val OUTPUT_EVENT_BATCH_QUEUE_ATTRIBUTE = arrayOf(EVENT_BATCH_QUEUE_ATTRIBUTE, "out")
 
@@ -129,7 +130,7 @@ fun main(args: Array<String>) = try {
 
 
     val service = when (settings.useTransportMode) {
-        WoodpeckerMode.TRANSPORT_MODE -> {
+        WoodpeckerMode.MESSAGE_TRANSPORT_MODE -> {
             val onBatchProxy = createBatchProxy(settings, resources, onEvent, onTransportBatch)
 
             Service(
@@ -170,6 +171,9 @@ fun main(args: Array<String>) = try {
                 onBatchProxy,
                 onEvent
             )
+        }
+        else -> {
+            throw OperationNotSupportedException()
         }
     }.apply { resources += "service" to ::close }
 

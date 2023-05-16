@@ -17,5 +17,5 @@
 package com.exactpro.th2.woodpecker
 
 enum class WoodpeckerMode {
-    TRANSPORT_MODE, EVENT_MODE, MESSAGE_MODE
+    MESSAGE_TRANSPORT_MODE, EVENT_TRANSPORT_MODE, MESSAGE_MODE, EVENT_MODE
 }

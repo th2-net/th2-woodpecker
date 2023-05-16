@@ -18,9 +18,14 @@ package com.exactpro.th2.woodpecker.api
 
 import com.exactpro.th2.woodpecker.api.event.IEventGenerator
 import com.exactpro.th2.woodpecker.api.event.IEventGeneratorContext
+import javax.naming.OperationNotSupportedException
 
 interface IGeneratorFactory<S : IGeneratorSettings> {
     val settingsClass: Class<out S>
-    fun createMessageGenerator(context: IMessageGeneratorContext<S>): IMessageGenerator<S>
-    fun createEventGenerator(context: IEventGeneratorContext<S>): IEventGenerator<S>
+    fun createMessageGenerator(context: IMessageGeneratorContext<S>): IMessageGenerator<S>{
+        throw OperationNotSupportedException()
+    }
+    fun createEventGenerator(context: IEventGeneratorContext<S>): IEventGenerator<S>{
+        throw OperationNotSupportedException()
+    }
 }
