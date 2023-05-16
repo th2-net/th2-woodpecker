@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023 Exactpro (Exactpro Systems Limited)
+ * Copyright 2023 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,19 @@
  * limitations under the License.
  */
 
-package com.exactpro.th2.woodpecker.api
+package com.exactpro.th2.woodpecker.api.event
 
-import com.exactpro.th2.common.grpc.MessageGroup
-import com.exactpro.th2.common.grpc.MessageGroupBatch
-import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.GroupBatch
+import com.exactpro.th2.common.grpc.Event
+import com.exactpro.th2.common.grpc.EventBatch
+import com.exactpro.th2.woodpecker.api.IGeneratorSettings
 import java.lang.UnsupportedOperationException
 import javax.annotation.concurrent.ThreadSafe
 
 @ThreadSafe // methods will be called from different threads, but each method will be called from a single thread only
-interface IMessageGenerator<S : IGeneratorSettings> : AutoCloseable {
+interface IEventGenerator<S : IGeneratorSettings> : AutoCloseable {
     fun onStart(settings: S?) = Unit
-    fun onNext(size: Int): MessageGroupBatch { throw UnsupportedOperationException() }
-    fun onNextTransport(size: Int): GroupBatch { throw UnsupportedOperationException() }
-    fun onResponse(message: MessageGroup) = Unit
+    fun onNext(size: Int): EventBatch { throw UnsupportedOperationException() }
+    fun onResponse(event: Event) = Unit
     fun onStop() = Unit
     override fun close() = Unit
 }

@@ -19,6 +19,7 @@
 package com.exactpro.th2.woodpecker
 
 import com.exactpro.th2.common.event.Event
+import com.exactpro.th2.common.grpc.EventBatch
 import com.exactpro.th2.common.grpc.EventID
 import com.exactpro.th2.common.grpc.MessageGroup
 import com.exactpro.th2.common.grpc.MessageGroupBatch
@@ -28,8 +29,9 @@ import com.exactpro.th2.common.schema.factory.CommonFactory
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.GroupBatch
 import com.exactpro.th2.common.schema.message.impl.rabbitmq.transport.TransportGroupBatchRouter
 import com.exactpro.th2.common.schema.message.storeEvent
-import com.exactpro.th2.woodpecker.api.IMessageGeneratorFactory
-import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
+import com.exactpro.th2.woodpecker.api.IGeneratorFactory
+import com.exactpro.th2.woodpecker.api.IGeneratorSettings
+import com.exactpro.th2.woodpecker.api.impl.EventGeneratorContext
 import com.exactpro.th2.woodpecker.api.impl.MessageGeneratorContext
 import com.fasterxml.jackson.databind.json.JsonMapper
 import com.fasterxml.jackson.databind.module.SimpleModule
@@ -50,6 +52,10 @@ private val INPUT_MSG_GROUP_QUEUE_ATTRIBUTE = arrayOf(MSG_GROUP_QUEUE_ATTRIBUTE,
 private val OUTPUT_MSG_GROUP_QUEUE_ATTRIBUTE = arrayOf(MSG_GROUP_QUEUE_ATTRIBUTE, "out")
 private val OUTPUT_TRANSPORT_MSG_QUEUE_ATTRIBUTE = arrayOf(TransportGroupBatchRouter.TRANSPORT_GROUP_ATTRIBUTE, "out")
 
+private const val EVENT_BATCH_QUEUE_ATTRIBUTE = "protobuf-event"
+private val INPUT_EVENT_BATCH_QUEUE_ATTRIBUTE = arrayOf(EVENT_BATCH_QUEUE_ATTRIBUTE, "in")
+private val OUTPUT_EVENT_BATCH_QUEUE_ATTRIBUTE = arrayOf(EVENT_BATCH_QUEUE_ATTRIBUTE, "out")
+
 fun main(args: Array<String>) = try {
     LIVENESS_MONITOR.enable()
     val resources = ConcurrentLinkedDeque<Pair<String, () -> Unit>>()
@@ -68,24 +74,47 @@ fun main(args: Array<String>) = try {
     val eventRouter = commonFactory.eventBatchRouter
     val messageGroupRouter = commonFactory.messageRouterMessageGroupBatch
     val transportMessageRouter = commonFactory.transportGroupBatchRouter
-    val generatorFactory = load<IMessageGeneratorFactory<IMessageGeneratorSettings>>()
+    val generatorFactory = load<IGeneratorFactory<IGeneratorSettings>>()
 
     val mapper = JsonMapper.builder()
         .addModule(KotlinModule.Builder().configure(NullIsSameAsDefault, true).build())
-        .addModule(SimpleModule().addAbstractTypeMapping(IMessageGeneratorSettings::class.java, generatorFactory.settingsClass))
-        .build()
+        .addModule(
+            SimpleModule().addAbstractTypeMapping(
+                IGeneratorSettings::class.java,
+                generatorFactory.settingsClass
+            )
+        ).build()
 
     val onProtoBatch = { batch: MessageGroupBatch -> messageGroupRouter.sendAll(batch, *OUTPUT_MSG_GROUP_QUEUE_ATTRIBUTE) }
+    val onProtoBatchEvent = { batch: EventBatch -> eventRouter.sendAll(batch, *OUTPUT_EVENT_BATCH_QUEUE_ATTRIBUTE) }
     val onTransportBatch = { batch: GroupBatch -> transportMessageRouter.sendAll(batch, *OUTPUT_TRANSPORT_MSG_QUEUE_ATTRIBUTE) }
-    val onRequest = { message: MessageGroup -> onProtoBatch(MessageGroupBatch.newBuilder().addGroups(message).build()) }
+
+    val onRequestMessage = { message: MessageGroup -> onProtoBatch(MessageGroupBatch.newBuilder().addGroups(message).build()) }
+    val onRequestEvent = { eventBatch: EventBatch -> onProtoBatchEvent(eventBatch)}
+
     val settings = commonFactory.getCustomConfiguration(Settings::class.java, mapper)
-    val context = MessageGeneratorContext(settings.generatorSettings, onRequest, commonFactory::loadDictionary)
-    val generator = generatorFactory.createGenerator(context).apply { resources += "generator" to ::close }
+
+    val messageGeneratorContext = MessageGeneratorContext(settings.generatorSettings, onRequestMessage, commonFactory::loadDictionary)
+    val eventGeneratorContext = EventGeneratorContext(settings.generatorSettings, onRequestEvent)
+
+    val messageGenerator = generatorFactory.createMessageGenerator(messageGeneratorContext).apply { resources += "messageGenerator" to ::close }
+    val eventGenerator = generatorFactory.createEventGenerator(eventGeneratorContext).apply { resources += "eventGenerator" to ::close }
+
 
     runCatching {
         checkNotNull(messageGroupRouter.subscribe({ _, batch ->
-            batch.groupsList.forEach(generator::onResponse)
+            batch.groupsList.forEach(messageGenerator::onResponse)
         }, *INPUT_MSG_GROUP_QUEUE_ATTRIBUTE))
+    }.onSuccess { monitor ->
+        resources += "subscriber-monitor" to monitor::unsubscribe
+    }.onFailure {
+        throw IllegalStateException("Failed to subscribe to input queue", it)
+    }
+
+    runCatching {
+        checkNotNull(eventRouter.subscribe({ _, batch ->
+            batch.eventsList.forEach(eventGenerator::onResponse)
+        }, *INPUT_EVENT_BATCH_QUEUE_ATTRIBUTE))
     }.onSuccess { monitor ->
         resources += "subscriber-monitor" to monitor::unsubscribe
     }.onFailure {
@@ -98,32 +127,50 @@ fun main(args: Array<String>) = try {
         eventRouter.storeEvent(event, parentId ?: rootEventId)
     }
 
-    val service = if (settings.useTransportMode) {
-        val onBatchProxy = createBatchProxy(settings, resources, onEvent, onTransportBatch)
 
-        Service(
-            settings.tickRate,
-            settings.maxBatchSize,
-            mapper::readValue,
-            generator::onStart,
-            generator::onNextTransport,
-            generator::onStop,
-            onBatchProxy,
-            onEvent
-        )
-    } else {
-        val onBatchProxy = createBatchProxy(settings, resources, onEvent, onProtoBatch)
+    val service = when (settings.useTransportMode) {
+        WoodpeckerMode.TRANSPORT_MODE -> {
+            val onBatchProxy = createBatchProxy(settings, resources, onEvent, onTransportBatch)
 
-        Service(
-            settings.tickRate,
-            settings.maxBatchSize,
-            mapper::readValue,
-            generator::onStart,
-            generator::onNext,
-            generator::onStop,
-            onBatchProxy,
-            onEvent
-        )
+            Service(
+                settings.tickRate,
+                settings.maxBatchSize,
+                mapper::readValue,
+                messageGenerator::onStart,
+                messageGenerator::onNextTransport,
+                messageGenerator::onStop,
+                onBatchProxy,
+                onEvent
+            )
+        }
+        WoodpeckerMode.EVENT_MODE -> {
+            val onBatchProxy = createBatchProxy(settings, resources, onEvent, onRequestEvent)
+
+            Service(
+                settings.tickRate,
+                settings.maxBatchSize,
+                mapper::readValue,
+                eventGenerator::onStart,
+                eventGenerator::onNext,
+                eventGenerator::onStop,
+                onBatchProxy,
+                onEvent
+            )
+        }
+        WoodpeckerMode.MESSAGE_MODE -> {
+            val onBatchProxy = createBatchProxy(settings, resources, onEvent, onProtoBatch)
+
+            Service(
+                settings.tickRate,
+                settings.maxBatchSize,
+                mapper::readValue,
+                messageGenerator::onStart,
+                messageGenerator::onNext,
+                messageGenerator::onStop,
+                onBatchProxy,
+                onEvent
+            )
+        }
     }.apply { resources += "service" to ::close }
 
     commonFactory.grpcRouter.startServer(service).run {
@@ -162,8 +209,8 @@ data class Settings(
     val tickRate: Int = 10,
     val maxBatchSize: Int = 1000,
     val maxOutputQueueSize: Int = 0,
-    val useTransportMode: Boolean = false,
-    val generatorSettings: IMessageGeneratorSettings,
+    val useTransportMode: WoodpeckerMode = WoodpeckerMode.MESSAGE_MODE,
+    val generatorSettings: IGeneratorSettings,
 ) {
     init {
         require(tickRate > 0) { "${::tickRate.name} is less or equal to zero: $maxBatchSize" }

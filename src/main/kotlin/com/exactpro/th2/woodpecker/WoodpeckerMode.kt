@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2023 Exactpro (Exactpro Systems Limited)
+ * Copyright 2023 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,8 @@
  * limitations under the License.
  */
 
-package com.exactpro.th2.woodpecker.api
+package com.exactpro.th2.woodpecker
 
-import com.exactpro.th2.common.grpc.MessageGroup
-import java.io.InputStream
-
-interface IMessageGeneratorContext<S : IGeneratorSettings> {
-    val settings: S
-    fun send(group: MessageGroup)
-    fun readDictionary(alias: String): InputStream
+enum class WoodpeckerMode {
+    TRANSPORT_MODE, EVENT_MODE, MESSAGE_MODE
 }
