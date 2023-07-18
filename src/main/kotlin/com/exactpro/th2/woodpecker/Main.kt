@@ -55,7 +55,7 @@ private val OUTPUT_TRANSPORT_MSG_QUEUE_ATTRIBUTE = arrayOf(TransportGroupBatchRo
 
 private const val EVENT_BATCH_QUEUE_ATTRIBUTE = "event"
 private val INPUT_EVENT_BATCH_QUEUE_ATTRIBUTE = arrayOf(EVENT_BATCH_QUEUE_ATTRIBUTE, "in")
-private val OUTPUT_EVENT_BATCH_QUEUE_ATTRIBUTE = arrayOf(EVENT_BATCH_QUEUE_ATTRIBUTE, "out")
+private val OUTPUT_EVENT_BATCH_QUEUE_ATTRIBUTE = arrayOf(EVENT_BATCH_QUEUE_ATTRIBUTE, "publish")
 
 fun main(args: Array<String>) = try {
     LIVENESS_MONITOR.enable()
