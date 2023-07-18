@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2022 Exactpro (Exactpro Systems Limited)
+ * Copyright 2021-2023 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package com.exactpro.th2.woodpecker
 import com.exactpro.th2.common.event.Event
 import com.exactpro.th2.common.event.IBodyData
 import com.exactpro.th2.common.grpc.EventID
-import com.exactpro.th2.woodpecker.api.IMessageGeneratorSettings
+import com.exactpro.th2.woodpecker.api.IGeneratorSettings
 import com.exactpro.th2.woodpecker.grpc.Response
 import com.exactpro.th2.woodpecker.grpc.Response.Status.FAILURE
 import com.exactpro.th2.woodpecker.grpc.Response.Status.SUCCESS
@@ -45,8 +45,8 @@ import java.util.concurrent.locks.LockSupport
 class Service<T>(
     private val tickRate: Int,
     private val maxBatchSize: Int,
-    private val readSettings: (String) -> IMessageGeneratorSettings,
-    private val onStart: (IMessageGeneratorSettings?) -> Unit,
+    private val readSettings: (String) -> IGeneratorSettings,
+    private val onStart: (IGeneratorSettings?) -> Unit,
     private val onNext: (Int) -> T,
     private val onStop: () -> Unit,
     private val onBatch: (T) -> Unit,
@@ -216,7 +216,7 @@ class Service<T>(
 
     private fun String?.readSettings() = if (isNullOrBlank()) null else readSettings(this)
 
-    private data class SettingsBody(val settings: IMessageGeneratorSettings?) : IBodyData
+    private data class SettingsBody(val settings: IGeneratorSettings?) : IBodyData
 
     companion object {
         private const val CLOSE_TIMEOUT_MS = 5000L

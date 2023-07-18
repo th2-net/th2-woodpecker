@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2023 Exactpro (Exactpro Systems Limited)
+ * Copyright 2023 Exactpro (Exactpro Systems Limited)
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-package com.exactpro.th2.woodpecker.api
+package com.exactpro.th2.woodpecker.api.impl
 
-import com.exactpro.th2.common.grpc.MessageGroup
-import java.io.InputStream
+import com.exactpro.th2.common.grpc.EventBatch
+import com.exactpro.th2.woodpecker.api.IGeneratorSettings
+import com.exactpro.th2.woodpecker.api.event.IEventGeneratorContext
 
-interface IMessageGeneratorContext<S : IGeneratorSettings> {
-    val settings: S
-    fun send(group: MessageGroup)
-    fun readDictionary(alias: String): InputStream
+class EventGeneratorContext<S : IGeneratorSettings>(
+    override val settings: S,
+    private val onRequest: (EventBatch) -> Unit,
+) : IEventGeneratorContext<S> {
+    override fun send(eventBatch: EventBatch) = onRequest(eventBatch)
 }
